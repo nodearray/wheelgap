@@ -1,0 +1,79 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "demo"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastlib" },
+    { name = "puresdist" },
+    { name = "purewheel" },
+    { name = "winonly", marker = "sys_platform == 'win32'" },
+    { name = "oldpy", marker = "python_full_version < '3.13'" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "devtool" },
+]
+
+[[package]]
+name = "fastlib"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/fastlib-2.0.0.tar.gz", hash = "sha256:00", size = 1 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/fastlib-2.0.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:00", size = 1 },
+    { url = "https://files.pythonhosted.org/packages/aa/fastlib-2.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:00", size = 1 },
+    { url = "https://files.pythonhosted.org/packages/aa/fastlib-2.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:00", size = 1 },
+]
+
+[[package]]
+name = "puresdist"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/puresdist-1.0.tar.gz", hash = "sha256:00", size = 1 }
+
+[[package]]
+name = "purewheel"
+version = "3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/purewheel-3.1.tar.gz", hash = "sha256:00", size = 1 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/purewheel-3.1-py3-none-any.whl", hash = "sha256:00", size = 1 },
+]
+
+[[package]]
+name = "winonly"
+version = "311"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/winonly-311-cp313-cp313-win_amd64.whl", hash = "sha256:00", size = 1 },
+]
+
+[[package]]
+name = "oldpy"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/oldpy-1.0.tar.gz", hash = "sha256:00", size = 1 }
+
+[[package]]
+name = "devtool"
+version = "0.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/devtool-0.5-py3-none-any.whl", hash = "sha256:00", size = 1 },
+]
+
+[[package]]
+name = "orphan"
+version = "9.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/orphan-9.9.tar.gz", hash = "sha256:00", size = 1 }
+
+[[package]]
+name = "gitdep"
+version = "0.0.1"
+source = { git = "https://github.com/example/gitdep?rev=abc#abc" }

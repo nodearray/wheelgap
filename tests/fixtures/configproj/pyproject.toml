@@ -1,0 +1,7 @@
+[project]
+name = "configproj"
+version = "0"
+
+[tool.wheelgap]
+python = ["3.13", "3.14t"]
+targets = ["win-amd64"]

@@ -48,6 +48,15 @@ wheelgap psycopg2 uvloop numpy==2.3.4 -t windows,win-arm64
 wheelgap --json > wheelgap.json
 ```
 
+Projects usually ship to the same platforms, so you can write the defaults down once in `pyproject.toml` (next to the lockfile, or in the current directory). Command-line flags still win.
+
+```toml
+[tool.wheelgap]
+python = ["3.13", "3.14t"]
+targets = ["linux-x86_64", "linux-aarch64", "musl-aarch64"]
+glibc = "2.31"
+```
+
 Each cell in the table is one of:
 
 | cell | meaning |
@@ -107,7 +116,7 @@ Sites like [pyreadiness.org](https://pyreadiness.org) and [free-threaded wheels]
 ## Roadmap
 
 - [ ] Pyodide/WebAssembly, iOS and Android targets
-- [ ] Read targets from `[tool.wheelgap]` in `pyproject.toml`
+- [x] Read targets from `[tool.wheelgap]` in `pyproject.toml`
 - [ ] Private indexes (`--index-url`, the simple API)
 - [ ] Infer the target from a `Dockerfile` (`FROM python:3.13-alpine`, `--platform=linux/arm64`)
 - [ ] "Closest version with a wheel" hints (e.g. upgrade `foo` 1.2 → 1.4 to get `musllinux` wheels)

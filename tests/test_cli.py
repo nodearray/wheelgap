@@ -65,3 +65,21 @@ def test_errors_exit_2(capsys, fixtures):
 def test_list_targets(capsys):
     code, out, _ = run(capsys, "--list-targets")
     assert code == 0 and "musl-aarch64" in out
+
+
+def test_defaults_from_pyproject(capsys, fixtures):
+    code, out, _ = run(capsys, str(fixtures / "configproj"), "--json")
+    assert code == 1
+    assert [t["label"] for t in json.loads(out)["targets"]] == ["3.13 win-amd64", "3.14t win-amd64"]
+
+
+def test_flags_beat_pyproject(capsys, fixtures):
+    _, out, _ = run(capsys, str(fixtures / "configproj"), "-p", "3.13", "-t", "linux-x86_64", "--json")
+    assert [t["label"] for t in json.loads(out)["targets"]] == ["3.13 linux-x86_64"]
+
+
+def test_bad_pyproject_exit_2(capsys, fixtures, tmp_path):
+    (tmp_path / "uv.lock").write_bytes((fixtures / "uvproj" / "uv.lock").read_bytes())
+    (tmp_path / "pyproject.toml").write_text("[tool.wheelgap]\nglibc = 2.31\n")
+    code, _, err = run(capsys, str(tmp_path))
+    assert code == 2 and "glibc must be a string" in err

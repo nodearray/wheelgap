@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import sysconfig
+import tomllib
+from pathlib import Path
 
 from . import __version__
 from .check import Row, Status, check
@@ -59,9 +61,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         metavar="PLATFORM",
         help=f"target platform (repeatable, or 'all'; default: {','.join(DEFAULT_PLATFORMS)})",
     )
-    p.add_argument("--glibc", default="2.36", metavar="X.Y", help="glibc version for linux-* targets (default: 2.36)")
-    p.add_argument("--musl", default="1.2", metavar="X.Y", help="musl version for musl-* targets (default: 1.2)")
-    p.add_argument("--macos", default="14.0", metavar="X.Y", help="minimum macOS for macos-* targets (default: 14.0)")
+    p.add_argument("--glibc", metavar="X.Y", help="glibc version for linux-* targets (default: 2.36)")
+    p.add_argument("--musl", metavar="X.Y", help="musl version for musl-* targets (default: 1.2)")
+    p.add_argument("--macos", metavar="X.Y", help="minimum macOS for macos-* targets (default: 14.0)")
     p.add_argument(
         "--online", action="store_true", help="re-check lockfile packages against PyPI instead of trusting the lockfile"
     )
@@ -72,6 +74,42 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--list-targets", action="store_true", help="list platform names and exit")
     p.add_argument("-V", "--version", action="version", version=f"wheelgap {__version__}")
     return p.parse_args(argv)
+
+
+LIST_KEYS = ("python", "targets")
+STR_KEYS = ("glibc", "musl", "macos")
+
+
+def find_pyproject(inputs: list[str]) -> Path | None:
+    """pyproject.toml next to the first lockfile or directory given, else in the current directory."""
+    for item in inputs:
+        p = Path(item)
+        if p.is_dir() or p.is_file():
+            candidate = (p if p.is_dir() else p.parent) / "pyproject.toml"
+            return candidate if candidate.is_file() else None
+    candidate = Path("pyproject.toml")
+    return candidate if candidate.is_file() else None
+
+
+def load_config(path: Path) -> dict:
+    """Defaults from the [tool.wheelgap] table; command-line flags still win."""
+    table = tomllib.loads(path.read_text(encoding="utf-8")).get("tool", {}).get("wheelgap", {})
+    if not isinstance(table, dict):
+        raise SourceError(f"{path}: [tool.wheelgap] must be a table")
+    config = {}
+    for key, value in table.items():
+        if key in LIST_KEYS:
+            if isinstance(value, str):
+                value = [value]
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise SourceError(f"{path}: [tool.wheelgap] {key} must be a list of strings")
+        elif key in STR_KEYS:
+            if not isinstance(value, str):
+                raise SourceError(f'{path}: [tool.wheelgap] {key} must be a string like "2.31"')
+        else:
+            raise SourceError(f"{path}: unknown key in [tool.wheelgap]: {key}")
+        config[key] = value
+    return config
 
 
 class Style:
@@ -179,7 +217,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        targets = build_targets(args.python or [running_python()], args.target, args.glibc, args.musl, args.macos)
+        pyproject = find_pyproject(args.inputs)
+        config = load_config(pyproject) if pyproject else {}
+        targets = build_targets(
+            args.python or config.get("python") or [running_python()],
+            args.target or config.get("targets", []),
+            args.glibc or config.get("glibc", "2.36"),
+            args.musl or config.get("musl", "1.2"),
+            args.macos or config.get("macos", "14.0"),
+        )
         sources = load_inputs(args.inputs or ["."])
     except (TargetError, SourceError, OSError) as e:
         print(f"wheelgap: error: {e}", file=sys.stderr)

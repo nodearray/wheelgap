@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Read default `python`, `targets`, `glibc`, `musl` and `macos` from `[tool.wheelgap]` in `pyproject.toml`. Command-line flags still win.
+
 ## 0.1.0 (2026-11-08)
 
 First release.
