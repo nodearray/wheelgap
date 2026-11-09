@@ -11,7 +11,7 @@ import tomllib
 from pathlib import Path
 
 from . import __version__
-from .check import Row, Status, check
+from .check import Row, Status, check, explain
 from .pypi import fill_all
 from .sources import SourceError, load_inputs
 from .targets import DEFAULT_PLATFORMS, PLATFORMS, Target, TargetError, build_targets
@@ -23,6 +23,7 @@ examples:
   wheelgap -p 3.14t -t all                 is my stack ready for free-threaded 3.14?
   wheelgap psycopg2 uvloop -t win-amd64    check packages without a lockfile
   wheelgap requirements.txt --json         machine-readable output for CI
+  wheelgap -t alpine-arm64 --explain       show which wheels were rejected, and why
 """
 
 
@@ -68,6 +69,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--online", action="store_true", help="re-check lockfile packages against PyPI instead of trusting the lockfile"
     )
     p.add_argument("--all", action="store_true", help="show every package, not just the ones with gaps")
+    p.add_argument("--explain", action="store_true", help="for each gap, list the wheels that were rejected and why")
     p.add_argument("--json", action="store_true", help="print JSON instead of a table")
     p.add_argument("--exit-zero", action="store_true", help="exit 0 even when gaps are found")
     p.add_argument("--color", choices=["auto", "always", "never"], default="auto")
@@ -180,23 +182,58 @@ def render_table(rows: list[Row], targets: list[Target], style: Style) -> list[s
     return out
 
 
-def report_json(rows: list[Row], targets: list[Target], sources: list[str], skipped: list) -> str:
+EXPLAIN_LIMIT = 8
+
+
+def gap_targets(row: Row, targets: list[Target]) -> list[Target]:
+    return [t for t in targets if row.results[t] in (Status.SOURCE, Status.MISSING)]
+
+
+def render_explain(rows: list[Row], targets: list[Target], style: Style) -> list[str]:
+    multi_py = len({t.python for t in targets}) > 1
+    out = []
+    for r in rows:
+        files = r.package.files or []
+        for t in gap_targets(r, targets):
+            cell, color = CELL[r.results[t]]
+            head = f"{r.package.name} {r.package.version or '?'} on {t.label(multi_py)}:"
+            out.append(f"{style.bold(head)} {getattr(style, color)(cell)}")
+            rejected = explain(files, t)
+            if not rejected:
+                out.append(style.dim("  no wheels published for this version"))
+            width = max((len(f) for f, _ in rejected[:EXPLAIN_LIMIT]), default=0)
+            for f, reason in rejected[:EXPLAIN_LIMIT]:
+                out.append(f"  {f.ljust(width)}  {style.dim(reason)}")
+            if len(rejected) > EXPLAIN_LIMIT:
+                out.append(style.dim(f"  … and {len(rejected) - EXPLAIN_LIMIT} more (--json lists them all)"))
+            out.append("")
+    return out
+
+
+def report_json(rows: list[Row], targets: list[Target], sources: list[str], skipped: list, explained: bool) -> str:
     multi_py = len({t.python for t in targets}) > 1
     gaps = [r for r in rows if not r.ok]
+
+    def package(r: Row) -> dict:
+        out = {
+            "name": r.package.name,
+            "version": r.package.version,
+            "error": r.package.error,
+            "results": {t.label(multi_py): r.results[t].value for t in targets},
+        }
+        if explained:
+            out["rejected"] = {
+                t.label(multi_py): [{"file": f, "reason": why} for f, why in explain(r.package.files or [], t)]
+                for t in gap_targets(r, targets)
+            }
+        return out
+
     return json.dumps(
         {
             "version": __version__,
             "sources": sources,
             "targets": [{"label": t.label(multi_py), "python": t.python, "platform": t.platform} for t in targets],
-            "packages": [
-                {
-                    "name": r.package.name,
-                    "version": r.package.version,
-                    "error": r.package.error,
-                    "results": {t.label(multi_py): r.results[t].value for t in targets},
-                }
-                for r in rows
-            ],
+            "packages": [package(r) for r in rows],
             "skipped": [{"name": p.name, "reason": p.skip} for p in skipped],
             "summary": {"packages": len(rows), "with_gaps": len(gaps)},
         },
@@ -243,12 +280,13 @@ def main(argv: list[str] | None = None) -> int:
     source_labels = [s.label for s in sources]
 
     if args.json:
-        print(report_json(rows, targets, source_labels, skipped))
+        print(report_json(rows, targets, source_labels, skipped, args.explain))
         return 0 if args.exit_zero or not gaps else 1
 
     style = Style(use_color(args.color))
     pys = ", ".join(dict.fromkeys(t.python for t in targets))
-    print(style.dim(f"wheelgap {__version__} · {' + '.join(source_labels)} · {len(rows)} packages · Python {pys}"))
+    n_pkgs = f"{len(rows)} package{'s' * (len(rows) != 1)}"
+    print(style.dim(f"wheelgap {__version__} · {' + '.join(source_labels)} · {n_pkgs} · Python {pys}"))
     print()
 
     shown = rows if args.all else gaps
@@ -260,6 +298,11 @@ def main(argv: list[str] | None = None) -> int:
         if hidden:
             noun = "package" if hidden == 1 else "packages"
             print(style.dim(f"{hidden} {noun} with wheels for every target hidden (--all to show)"))
+        if args.explain and gaps:
+            if hidden:
+                print()
+            for ln in render_explain(gaps, targets, style):
+                print(ln)
 
     if skipped:
         names = ", ".join(f"{p.name} ({p.skip})" for p in skipped)
@@ -287,6 +330,8 @@ def main(argv: list[str] | None = None) -> int:
         parts.append(style.dim(f"{unknown} unknown"))
     verb = "has" if len(gaps) == 1 else "have"
     print(f"{style.bold(f'{len(gaps)} of {len(rows)} packages')} {verb} gaps: " + ", ".join(parts) + ".")
+    if not args.explain:
+        print(style.dim("Run with --explain to see which wheels were rejected and why."))
     return 0 if args.exit_zero else 1
 
 

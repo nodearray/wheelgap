@@ -1,0 +1,33 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "armlib" },
+    { name = "newglibc" },
+]
+
+# Wheels for glibc on both arches and musl on x86_64 only, the classic Alpine ARM trap.
+[[package]]
+name = "armlib"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/armlib-1.4.0.tar.gz", hash = "sha256:00", size = 1 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/armlib-1.4.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:00", size = 1 },
+    { url = "https://files.pythonhosted.org/packages/aa/armlib-1.4.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:00", size = 1 },
+    { url = "https://files.pythonhosted.org/packages/aa/armlib-1.4.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:00", size = 1 },
+]
+
+# Only a wheel that needs a newer glibc than the default 2.36, and no sdist.
+[[package]]
+name = "newglibc"
+version = "2.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/newglibc-2.0-cp313-cp313-manylinux_2_39_aarch64.whl", hash = "sha256:00", size = 1 },
+]

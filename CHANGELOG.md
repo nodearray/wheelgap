@@ -4,6 +4,13 @@
 
 - Read default `python`, `targets`, `glibc`, `musl` and `macos` from `[tool.wheelgap]` in `pyproject.toml`. Command-line flags still win.
 
+## 0.1.1 (2026-11-08)
+
+- New `--explain` flag: for each gap, lists the wheels that were rejected and why (wrong libc, glibc/musl/macOS too new, wrong Python or ABI, abi3 on free-threaded), closest misses first. With `--json`, adds a `rejected` list per gap target.
+- Regression tests for the Alpine ARM trap: a `manylinux_*_aarch64` wheel never counts for `musl-aarch64`. (Thanks to a suggestion on r/madeinpython.)
+- The summary line suggests `--explain` when there are gaps.
+- Fixed "1 packages" in the header line.
+
 ## 0.1.0 (2026-11-08)
 
 First release.

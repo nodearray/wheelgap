@@ -46,6 +46,9 @@ wheelgap psycopg2 uvloop numpy==2.3.4 -t windows,win-arm64
 
 # Machine-readable, for scripts and CI
 wheelgap --json > wheelgap.json
+
+# Why is it a gap? List each rejected wheel and the reason
+wheelgap -t alpine-arm64 --explain
 ```
 
 Projects usually ship to the same platforms, so you can write the defaults down once in `pyproject.toml` (next to the lockfile, or in the current directory). Command-line flags still win.
@@ -68,6 +71,15 @@ Each cell in the table is one of:
 
 Packages that are fine everywhere are hidden; `--all` shows them.
 
+`--explain` lists, for each gap, the wheels that were rejected and why, closest misses first:
+
+```
+armlib 1.4.0 on musl-aarch64: ● source
+  armlib-1.4.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl  manylinux_2_17_aarch64 is a glibc wheel; musl (Alpine) needs musllinux
+```
+
+If you think wheelgap got a package wrong, that output (or `--json --explain`) is all a bug report needs, with no need to share your lockfile.
+
 **Exit codes:** `0` no gaps, `1` gaps found, `2` bad input. `--exit-zero` always exits `0`.
 
 ### Targets
@@ -89,7 +101,7 @@ Packages that are fine everywhere are hidden; `--all` shows them.
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: patrickballard/wheelgap@v0.1.0
+- uses: patrickballard/wheelgap@v0.1.1
   with:
     args: uv.lock -p 3.13 -t linux-x86_64,linux-aarch64
 ```

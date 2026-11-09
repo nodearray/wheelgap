@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -10,7 +11,7 @@ from packaging.tags import Tag
 from packaging.utils import InvalidWheelFilename, canonicalize_name, parse_wheel_filename
 
 from .sources import Edge, Package, Source
-from .targets import Target
+from .targets import PLATFORMS, Target
 
 
 class Status(StrEnum):
@@ -61,6 +62,85 @@ def status_for(files: list[str] | None, target: Target, _wheels: list[frozenset[
     if any(target.accepts(t) for t in wheels):
         return Status.WHEEL
     return Status.SOURCE if has_sdist(files) else Status.MISSING
+
+
+_PLAT_RE = re.compile(r"^(manylinux|musllinux|macosx)_(\d+)_(\d+)_(.+)$")
+_LIBC = {"manylinux": "glibc", "musllinux": "musl", "macosx": "macOS"}
+
+
+def _platform_reason(plat: str, target: Target) -> str:
+    family, arch = PLATFORMS[target.platform]
+    m = _PLAT_RE.match(plat)
+    if m:
+        kind, major, minor, wheel_arch = m.group(1), int(m.group(2)), int(m.group(3)), m.group(4)
+    elif plat.startswith("manylinux") and "_" in plat:  # manylinux2014_aarch64 and friends
+        kind, major, minor, wheel_arch = "manylinux", 0, 0, plat.split("_", 1)[1]
+    else:
+        return f"{plat} doesn't match {target.platform}"
+    same_arch = wheel_arch == arch or (kind == "macosx" and wheel_arch == "universal2")
+    if same_arch and kind == "manylinux" and family == "musllinux":
+        return f"{plat} is a glibc wheel; musl (Alpine) needs musllinux"
+    if same_arch and kind == "musllinux" and family == "manylinux":
+        return f"{plat} is a musl wheel; glibc Linux needs manylinux"
+    ceiling = {"manylinux": target.glibc, "musllinux": target.musl, "macosx": target.macos}[kind]
+    same_family = kind == family or (kind == "macosx" and family == "macos")
+    if same_arch and same_family and major and (major, minor) > ceiling:
+        flag = {"manylinux": "--glibc", "musllinux": "--musl", "macosx": "--macos"}[kind]
+        have = ".".join(map(str, ceiling))
+        return f"{plat} needs {_LIBC[kind]} {major}.{minor}, newer than {have} ({flag})"
+    return f"{plat} doesn't match {target.platform}"
+
+
+def rejection(filename: str, target: Target) -> str | None:
+    """Why `target` can't install this wheel, or None if it can."""
+    try:
+        wheel = parse_wheel_filename(filename)[3]
+    except InvalidWheelFilename:
+        return "unparseable wheel filename"
+    if target.accepts(wheel):
+        return None
+    platforms = sorted({t.platform for t in wheel})
+    if "any" in platforms or set(platforms) & set(target.platform_tags()):
+        if target.freethreaded and any(t.abi == "abi3" for t in wheel):
+            return "abi3 wheels can't be used on free-threaded Python"
+        built = ", ".join(sorted({f"{t.interpreter}-{t.abi}" for t in wheel}))
+        return f"built for {built}, not CPython {target.python}"
+    # Name the tag closest to the target: same arch first, and the modern manylinux_2_17_* form
+    # rather than its legacy manylinux2014_* alias.
+    arch = PLATFORMS[target.platform][1]
+    closest = min(platforms, key=lambda p: (not p.endswith(arch), not _PLAT_RE.match(p), p))
+    return _platform_reason(closest, target)
+
+
+_PY_MINOR_RE = re.compile(r"^(?:cp|py)3(\d+)$")
+_OS_PREFIX = {"manylinux": "manylinux", "musllinux": "musllinux", "macos": "macosx", "windows": "win"}
+
+
+def _closeness(filename: str, target: Target) -> tuple[int, int, str]:
+    """Sort key: right platform first, then same arch, then same OS, then nearest Python version."""
+    try:
+        wheel = parse_wheel_filename(filename)[3]
+    except InvalidWheelFilename:
+        return (3, 99, filename)
+    platforms = {t.platform for t in wheel}
+    arch = PLATFORMS[target.platform][1]
+    if "any" in platforms or platforms & set(target.platform_tags()):
+        group = 0
+    elif any(p.endswith((arch, "universal2")) for p in platforms):
+        group = 1
+    elif any(p.startswith(_OS_PREFIX[PLATFORMS[target.platform][0]]) for p in platforms):
+        group = 2
+    else:
+        group = 3
+    minors = [int(m.group(1)) for t in wheel if (m := _PY_MINOR_RE.match(t.interpreter))]
+    distance = min((abs(m - target.minor) for m in minors), default=99)
+    return (group, distance, filename)
+
+
+def explain(files: list[str], target: Target) -> list[tuple[str, str]]:
+    """(filename, reason) for every wheel `target` rejects, the closest misses first."""
+    out = [(f, r) for f in files if f.endswith(".whl") and (r := rejection(f, target))]
+    return sorted(out, key=lambda fr: _closeness(fr[0], target))
 
 
 _marker_cache: dict[str, Marker | None] = {}
