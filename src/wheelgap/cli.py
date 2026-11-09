@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import __version__
 from .check import Row, Status, check, explain
+from .dockerfile import DockerfileError, read_dockerfile
 from .pypi import fill_all
 from .sources import SourceError, load_inputs
 from .targets import DEFAULT_PLATFORMS, PLATFORMS, Target, TargetError, build_targets
@@ -65,6 +66,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--glibc", metavar="X.Y", help="glibc version for linux-* targets (default: 2.36)")
     p.add_argument("--musl", metavar="X.Y", help="musl version for musl-* targets (default: 1.2)")
     p.add_argument("--macos", metavar="X.Y", help="minimum macOS for macos-* targets (default: 14.0)")
+    p.add_argument(
+        "--dockerfile",
+        metavar="PATH",
+        help="take -p/-t (and --glibc/--musl) from the last FROM line, e.g. FROM python:3.13-alpine",
+    )
     p.add_argument(
         "--online", action="store_true", help="re-check lockfile packages against PyPI instead of trusting the lockfile"
     )
@@ -256,6 +262,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         pyproject = find_pyproject(args.inputs)
         config = load_config(pyproject) if pyproject else {}
+        if args.dockerfile:
+            # The image beats pyproject.toml; flags still win.
+            image = read_dockerfile(Path(args.dockerfile))
+            config.update(python=[image.python], targets=[image.platform])
+            config.update({k: v for k, v in (("glibc", image.glibc), ("musl", image.musl)) if v})
         targets = build_targets(
             args.python or config.get("python") or [running_python()],
             args.target or config.get("targets", []),
@@ -264,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
             args.macos or config.get("macos", "14.0"),
         )
         sources = load_inputs(args.inputs or ["."])
-    except (TargetError, SourceError, OSError) as e:
+    except (TargetError, SourceError, DockerfileError, OSError) as e:
         print(f"wheelgap: error: {e}", file=sys.stderr)
         return 2
     except Exception as e:  # malformed TOML and friends

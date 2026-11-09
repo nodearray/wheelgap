@@ -44,6 +44,9 @@ wheelgap uv.lock -p 3.12,3.13,3.14 -t linux-x86_64,linux-aarch64
 # No lockfile? Check packages directly (latest version, or pin one)
 wheelgap psycopg2 uvloop numpy==2.3.4 -t windows,win-arm64
 
+# Take the target from your Dockerfile (last FROM line, official python images)
+wheelgap --dockerfile Dockerfile
+
 # Machine-readable, for scripts and CI
 wheelgap --json > wheelgap.json
 
@@ -130,7 +133,7 @@ Sites like [pyreadiness.org](https://pyreadiness.org) and [free-threaded wheels]
 - [ ] Pyodide/WebAssembly, iOS and Android targets
 - [x] Read targets from `[tool.wheelgap]` in `pyproject.toml`
 - [ ] Private indexes (`--index-url`, the simple API)
-- [ ] Infer the target from a `Dockerfile` (`FROM python:3.13-alpine`, `--platform=linux/arm64`)
+- [x] Infer the target from a `Dockerfile` (`FROM python:3.13-alpine`, `--platform=linux/arm64`)
 - [ ] "Closest version with a wheel" hints (e.g. upgrade `foo` 1.2 → 1.4 to get `musllinux` wheels)
 
 Contributions welcome. Issues labelled [good first issue](https://github.com/patrickballard/wheelgap/labels/good%20first%20issue) are a good start, and [CONTRIBUTING.md](CONTRIBUTING.md) has the 3-command dev setup.
