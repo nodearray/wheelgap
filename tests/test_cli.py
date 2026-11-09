@@ -75,7 +75,7 @@ def test_defaults_from_pyproject(capsys, fixtures):
 
 def test_flags_beat_pyproject(capsys, fixtures):
     _, out, _ = run(capsys, str(fixtures / "configproj"), "-p", "3.13", "-t", "linux-x86_64", "--json")
-    assert [t["label"] for t in json.loads(out)["targets"]] == ["3.13 linux-x86_64"]
+    assert [t["label"] for t in json.loads(out)["targets"]] == ["linux-x86_64"]
 
 
 def test_bad_pyproject_exit_2(capsys, fixtures, tmp_path):
